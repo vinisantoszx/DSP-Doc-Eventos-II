@@ -25,7 +25,7 @@ app = FastAPI(
 
 
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def registrar_requisicoes(request: Request, call_next):
     inicio = time.time()
     response = await call_next(request)
     duracao = round((time.time() - inicio) * 1000, 2)
@@ -40,9 +40,9 @@ def on_startup():
     create_db_and_tables()
 
 
-@app.get("/", tags=["Status"])
-def health_check():
-    return {"status": "online", "sistema": "Reservas de Espaços"}
+@app.get("/", tags=["Sistema"])
+def status_api():
+    return {"status": "ativo", "sistema": "Sistema de Reservas de Espaços"}
 
 
 app.include_router(unidades.router)
