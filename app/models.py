@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from pydantic import field_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -223,6 +224,11 @@ class ReservaBase(SQLModel):
     usuario_id: int = Field(foreign_key="usuario.id")
     espaco_id: int = Field(foreign_key="espaco.id")
 
+    @field_validator("data_inicio", "data_fim")
+    @classmethod
+    def remover_fuso(cls, v: datetime) -> datetime:
+        return v.replace(tzinfo=None)
+
 
 class Reserva(ReservaBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -256,6 +262,11 @@ class ReservaUpdate(SQLModel):
     espaco_id: int | None = None
     recurso_ids: list[int] | None = None
 
+    @field_validator("data_inicio", "data_fim")
+    @classmethod
+    def remover_fuso(cls, v: datetime | None) -> datetime | None:
+        return v.replace(tzinfo=None) if v else None
+
 
 class PaginaReservas(SQLModel):
     dados: list[ReservaPublicDetalhada]
@@ -267,6 +278,11 @@ class BloqueioBase(SQLModel):
     data_inicio: datetime
     data_fim: datetime
     espaco_id: int = Field(foreign_key="espaco.id")
+
+    @field_validator("data_inicio", "data_fim")
+    @classmethod
+    def remover_fuso(cls, v: datetime) -> datetime:
+        return v.replace(tzinfo=None)
 
 
 class BloqueioEspaco(BloqueioBase, table=True):
@@ -291,6 +307,11 @@ class BloqueioUpdate(SQLModel):
     data_inicio: datetime | None = None
     data_fim: datetime | None = None
     espaco_id: int | None = None
+
+    @field_validator("data_inicio", "data_fim")
+    @classmethod
+    def remover_fuso(cls, v: datetime | None) -> datetime | None:
+        return v.replace(tzinfo=None) if v else None
 
 
 class PaginaBloqueios(SQLModel):
