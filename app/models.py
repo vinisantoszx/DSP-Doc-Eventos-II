@@ -106,6 +106,7 @@ class EspacoBase(SQLModel):
     capacidade: int = Field(gt=0)
     descricao: str | None = None
     ativo: bool = True
+    andar: int | None = None
     unidade_id: int = Field(foreign_key="unidade.id")
 
 
@@ -139,6 +140,7 @@ class EspacoUpdate(SQLModel):
     capacidade: int | None = None
     descricao: str | None = None
     ativo: bool | None = None
+    andar: int | None = None
     unidade_id: int | None = None
     infraestrutura: InfraestruturaUpdate | None = None
 
