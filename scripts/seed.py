@@ -1,7 +1,14 @@
 from sqlmodel import Session, select
 
 from app.database import engine
-from app.models import Recurso, Unidade, Usuario
+from app.models import (
+    Espaco,
+    InfraestruturaEspaco,
+    Recurso,
+    TipoEspaco,
+    Unidade,
+    Usuario,
+)
 
 def popular_unidades(session: Session) -> None:
     unidades = [
@@ -131,11 +138,138 @@ def popular_recursos(session: Session) -> None:
 
     session.commit()
 
+
+def popular_espacos(session: Session) -> None:
+    unidades = {
+        unidade.nome: unidade
+        for unidade in session.exec(select(Unidade)).all()
+    }
+
+    unidade_tecnologia = unidades["Unidade Acadêmica de Tecnologia"]
+    unidade_ciencias = unidades["Unidade Acadêmica de Ciências"]
+    unidade_administrativa = unidades["Unidade Administrativa"]
+
+    espacos = [
+        Espaco(
+            nome="Auditório Central",
+            tipo=TipoEspaco.auditorio,
+            capacidade=200,
+            descricao="Auditório principal com palco e cabine de som",
+            andar=0,
+            unidade_id=unidade_tecnologia.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+                possui_som=True,
+                acessibilidade=True,
+            ),
+        ),
+        Espaco(
+            nome="Laboratório de Informática 1",
+            tipo=TipoEspaco.laboratorio,
+            capacidade=40,
+            descricao="Laboratório com computadores para aulas práticas",
+            andar=1,
+            unidade_id=unidade_tecnologia.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+                qtd_computadores=40,
+                acessibilidade=True,
+            ),
+        ),
+        Espaco(
+            nome="Laboratório de Informática 2",
+            tipo=TipoEspaco.laboratorio,
+            capacidade=30,
+            descricao="Laboratório com computadores para aulas práticas",
+            andar=1,
+            unidade_id=unidade_tecnologia.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+                qtd_computadores=30,
+            ),
+        ),
+        Espaco(
+            nome="Sala de Reuniões A1",
+            tipo=TipoEspaco.sala_reuniao,
+            capacidade=12,
+            descricao="Sala para reuniões de grupos de pesquisa",
+            andar=2,
+            unidade_id=unidade_tecnologia.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+            ),
+        ),
+        Espaco(
+            nome="Sala de Treinamento B1",
+            tipo=TipoEspaco.sala_treinamento,
+            capacidade=25,
+            descricao="Sala para cursos e treinamentos",
+            andar=1,
+            unidade_id=unidade_ciencias.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+                possui_som=True,
+            ),
+        ),
+        Espaco(
+            nome="Laboratório de Química",
+            tipo=TipoEspaco.laboratorio,
+            capacidade=20,
+            descricao="Laboratório para aulas práticas de química",
+            andar=0,
+            unidade_id=unidade_ciencias.id,
+            infraestrutura=InfraestruturaEspaco(
+                climatizado=False,
+                observacoes="Uso somente com acompanhamento do técnico",
+            ),
+        ),
+        Espaco(
+            nome="Espaço Multiuso B2",
+            tipo=TipoEspaco.multiuso,
+            capacidade=80,
+            descricao="Espaço para eventos e atividades diversas",
+            unidade_id=unidade_ciencias.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+                possui_som=True,
+                acessibilidade=True,
+            ),
+        ),
+        Espaco(
+            nome="Sala de Reuniões Administrativa",
+            tipo=TipoEspaco.sala_reuniao,
+            capacidade=10,
+            descricao="Sala de reuniões da administração",
+            andar=1,
+            ativo=False,
+            unidade_id=unidade_administrativa.id,
+            infraestrutura=InfraestruturaEspaco(
+                possui_projetor=True,
+            ),
+        ),
+    ]
+
+    espacos_cadastrados = session.exec(
+        select(Espaco)
+    ).all()
+
+    nomes_existentes = {
+        espaco.nome for espaco in espacos_cadastrados
+    }
+
+    for espaco in espacos:
+        if espaco.nome not in nomes_existentes:
+            session.add(espaco)
+
+    session.commit()
+
+
 def main() -> None:
     with Session(engine) as session:
         popular_unidades(session)
         popular_usuarios(session)
         popular_recursos(session)
+        popular_espacos(session)
 
 
 if __name__ == "__main__":
