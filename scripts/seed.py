@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from app.database import engine
 from app.models import (
+    BloqueioEspaco,
     Espaco,
     InfraestruturaEspaco,
     Recurso,
@@ -443,6 +444,56 @@ def popular_reservas(session: Session) -> None:
     session.add_all(reservas)
     session.commit()
 
+def popular_bloqueios(session: Session) -> None:
+    espacos = {
+        espaco.nome: espaco
+        for espaco in session.exec(select(Espaco)).all()
+    }
+
+    bloqueios = [
+        BloqueioEspaco(
+            motivo="Manutenção dos equipamentos de áudio",
+            data_inicio=montar_horario(5, 8),
+            data_fim=montar_horario(5, 12),
+            espaco_id=espacos["Auditório Central"].id,
+        ),
+        BloqueioEspaco(
+            motivo="Manutenção dos computadores",
+            data_inicio=montar_horario(8, 13),
+            data_fim=montar_horario(8, 17),
+            espaco_id=espacos["Laboratório de Informática 2"].id,
+        ),
+        BloqueioEspaco(
+            motivo="Limpeza e manutenção",
+            data_inicio=montar_horario(9, 8),
+            data_fim=montar_horario(9, 12),
+            espaco_id=espacos["Sala de Reuniões A1"].id,
+        ),
+        BloqueioEspaco(
+            motivo="Manutenção elétrica",
+            data_inicio=montar_horario(11, 8),
+            data_fim=montar_horario(11, 12),
+            espaco_id=espacos["Espaço Multiuso B2"].id,
+        ),
+    ]
+
+    bloqueios_cadastrados = session.exec(
+        select(BloqueioEspaco)
+    ).all()
+
+    bloqueios_existentes = {
+        (bloqueio.espaco_id, bloqueio.motivo)
+        for bloqueio in bloqueios_cadastrados
+    }
+
+    for bloqueio in bloqueios:
+        identificador = (bloqueio.espaco_id, bloqueio.motivo)
+
+        if identificador not in bloqueios_existentes:
+            session.add(bloqueio)
+            bloqueios_existentes.add(identificador)
+
+    session.commit()
 
 def main() -> None:
     with Session(engine) as session:
@@ -451,6 +502,7 @@ def main() -> None:
         popular_recursos(session)
         popular_espacos(session)
         popular_reservas(session)
+        popular_bloqueios(session)
 
 
 if __name__ == "__main__":
