@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from pydantic import field_validator
+from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -218,8 +219,8 @@ class PaginaRecursos(SQLModel):
 class ReservaBase(SQLModel):
     finalidade: str
     qtd_participantes: int = Field(gt=0)
-    data_inicio: datetime
-    data_fim: datetime
+    data_inicio: datetime = Field(sa_type=DateTime)
+    data_fim: datetime = Field(sa_type=DateTime)
     status: StatusReserva = StatusReserva.confirmada
     usuario_id: int = Field(foreign_key="usuario.id")
     espaco_id: int = Field(foreign_key="espaco.id")
@@ -275,8 +276,8 @@ class PaginaReservas(SQLModel):
 
 class BloqueioBase(SQLModel):
     motivo: str
-    data_inicio: datetime
-    data_fim: datetime
+    data_inicio: datetime = Field(sa_type=DateTime)
+    data_fim: datetime = Field(sa_type=DateTime)
     espaco_id: int = Field(foreign_key="espaco.id")
 
     @field_validator("data_inicio", "data_fim")
