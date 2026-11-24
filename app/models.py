@@ -320,3 +320,14 @@ class BloqueioUpdate(SQLModel):
 class PaginaBloqueios(SQLModel):
     dados: list[BloqueioPublicDetalhado]
     paginacao: MetadadosPaginacao
+
+class HistoricoUtilizacaoPublic(SQLModel):
+    reserva_id: int
+    finalidade: str
+    qtd_participantes: int
+    data_inicio: datetime
+    data_fim: datetime
+    status: StatusReserva
+    espaco: str
+    unidade: str
+    usuario: str
