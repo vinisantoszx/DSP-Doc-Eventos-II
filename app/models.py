@@ -336,3 +336,8 @@ class EspacosMaisRequisitadosPublic(SQLModel):
     espaco_id: int
     espaco: str
     total_reservas: int
+
+class ReservasPorUnidadePublic(SQLModel):
+    unidade_id: int
+    unidade: str
+    total_reservas: int

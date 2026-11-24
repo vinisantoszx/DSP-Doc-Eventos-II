@@ -9,6 +9,7 @@ from app.models import (
     EspacosMaisRequisitadosPublic,
     HistoricoUtilizacaoPublic,
     Reserva,
+    ReservasPorUnidadePublic,
     Unidade,
     Usuario,
 )
@@ -106,4 +107,38 @@ def espacos_mais_requisitados(
             "total_reservas": quantidade,
         }
         for espaco_id, nome, quantidade in resultados
+    ]
+
+@router.get(
+    "/reservas-por-unidade",
+    response_model=list[ReservasPorUnidadePublic],
+)
+def reservas_por_unidade(
+    session: Session = Depends(get_session),
+):
+    total_reservas = func.coalesce(
+        func.count(Reserva.id), 0
+    )
+
+    consulta = (
+        select(
+            Unidade.id,
+            Unidade.nome,
+            total_reservas.label("total_reservas"),
+        )
+        .outerjoin(Espaco, Espaco.unidade_id == Unidade.id)
+        .outerjoin(Reserva, Reserva.espaco_id == Espaco.id)
+        .group_by(Unidade.id, Unidade.nome)
+        .order_by(total_reservas.desc(), Unidade.nome)
+    )
+
+    resultados = session.exec(consulta).all()
+
+    return [
+        {
+            "unidade_id": unidade_id,
+            "unidade": nome,
+            "total_reservas": quantidade,
+        }
+        for unidade_id, nome, quantidade in resultados
     ]
