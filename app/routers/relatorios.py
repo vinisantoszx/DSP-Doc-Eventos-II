@@ -7,9 +7,13 @@ from app.database import get_session
 from app.models import (
     Espaco,
     EspacosMaisRequisitadosPublic,
+    EstatisticasGeraisPublic,
     HistoricoUtilizacaoPublic,
+    Recurso,
     Reserva,
+    ReservaRecurso,
     ReservasPorUnidadePublic,
+    StatusReserva,
     Unidade,
     Usuario,
 )
@@ -142,3 +146,75 @@ def reservas_por_unidade(
         }
         for unidade_id, nome, quantidade in resultados
     ]
+
+@router.get(
+    "/estatisticas-gerais",
+    response_model=EstatisticasGeraisPublic,
+)
+def estatisticas_gerais(
+    session: Session = Depends(get_session),
+):
+    agora = datetime.now()
+
+    reservas_futuras = session.exec(
+        select(func.count(Reserva.id)).where(
+            Reserva.status == StatusReserva.confirmada,
+            Reserva.data_inicio > agora,
+        )
+    ).one()
+
+    reservas_em_andamento = session.exec(
+        select(func.count(Reserva.id)).where(
+            Reserva.status == StatusReserva.em_andamento
+        )
+    ).one()
+
+    reservas_canceladas = session.exec(
+        select(func.count(Reserva.id)).where(
+            Reserva.status == StatusReserva.cancelada
+        )
+    ).one()
+
+    reservas_concluidas = session.exec(
+        select(func.count(Reserva.id)).where(
+            Reserva.status == StatusReserva.concluida
+        )
+    ).one()
+
+    consulta_recursos = (
+        select(
+            Recurso.id,
+            Recurso.nome,
+            func.count(ReservaRecurso.reserva_id).label(
+                "total_reservas"
+            ),
+        )
+        .outerjoin(
+            ReservaRecurso,
+            ReservaRecurso.recurso_id == Recurso.id,
+        )
+        .group_by(Recurso.id, Recurso.nome)
+        .order_by(
+            func.count(ReservaRecurso.reserva_id).desc(),
+            Recurso.nome,
+        )
+    )
+
+    resultados_recursos = session.exec(consulta_recursos).all()
+
+    recursos_mais_utilizados = [
+        {
+            "recurso_id": recurso_id,
+            "recurso": nome,
+            "total_reservas": quantidade,
+        }
+        for recurso_id, nome, quantidade in resultados_recursos
+    ]
+
+    return {
+        "reservas_futuras": reservas_futuras,
+        "reservas_em_andamento": reservas_em_andamento,
+        "reservas_canceladas": reservas_canceladas,
+        "reservas_concluidas": reservas_concluidas,
+        "recursos_mais_utilizados": recursos_mais_utilizados,
+    }

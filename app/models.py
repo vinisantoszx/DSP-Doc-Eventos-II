@@ -341,3 +341,16 @@ class ReservasPorUnidadePublic(SQLModel):
     unidade_id: int
     unidade: str
     total_reservas: int
+
+class RecursoMaisUtilizadoPublic(SQLModel):
+    recurso_id: int
+    recurso: str
+    total_reservas: int
+
+
+class EstatisticasGeraisPublic(SQLModel):
+    reservas_futuras: int
+    reservas_em_andamento: int
+    reservas_canceladas: int
+    reservas_concluidas: int
+    recursos_mais_utilizados: list[RecursoMaisUtilizadoPublic]
