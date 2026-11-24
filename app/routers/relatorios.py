@@ -1,11 +1,12 @@
 ﻿from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import (
     Espaco,
+    EspacosMaisRequisitadosPublic,
     HistoricoUtilizacaoPublic,
     Reserva,
     Unidade,
@@ -72,4 +73,37 @@ def historico_utilizacao(
             "usuario": usuario.nome,
         }
         for reserva, espaco, unidade, usuario in resultados
+    ]
+
+@router.get(
+    "/espacos-mais-requisitados",
+    response_model=list[EspacosMaisRequisitadosPublic],
+)
+def espacos_mais_requisitados(
+    session: Session = Depends(get_session),
+):
+    total_reservas = func.coalesce(
+        func.count(Reserva.id), 0
+    )
+
+    consulta = (
+        select(
+            Espaco.id,
+            Espaco.nome,
+            total_reservas.label("total_reservas"),
+        )
+        .outerjoin(Reserva, Reserva.espaco_id == Espaco.id)
+        .group_by(Espaco.id, Espaco.nome)
+        .order_by(total_reservas.desc(), Espaco.nome)
+    )
+
+    resultados = session.exec(consulta).all()
+
+    return [
+        {
+            "espaco_id": espaco_id,
+            "espaco": nome,
+            "total_reservas": quantidade,
+        }
+        for espaco_id, nome, quantidade in resultados
     ]

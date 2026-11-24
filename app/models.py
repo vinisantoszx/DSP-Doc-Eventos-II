@@ -331,3 +331,8 @@ class HistoricoUtilizacaoPublic(SQLModel):
     espaco: str
     unidade: str
     usuario: str
+
+class EspacosMaisRequisitadosPublic(SQLModel):
+    espaco_id: int
+    espaco: str
+    total_reservas: int
