@@ -11,6 +11,7 @@ from app.models import (
     RecursoCreate,
     RecursoPublic,
     RecursoUpdate,
+    ReservaRecurso,
 )
 
 router = APIRouter(
@@ -195,4 +196,51 @@ def atualizar_recurso(
         raise HTTPException(
             status_code=409,
             detail="Patrimônio já cadastrado.",
+        )
+
+
+@router.delete(
+    "/{recurso_id}",
+    status_code=204,
+)
+def excluir_recurso(
+    recurso_id: int,
+    session: Session = Depends(get_session),
+):
+    recurso = session.get(
+        Recurso,
+        recurso_id,
+    )
+
+    if not recurso:
+        raise HTTPException(
+            status_code=404,
+            detail="Recurso não encontrado.",
+        )
+
+    # Desativa o recurso caso já tenha vínculo com reservas anteriores
+    vinculo = session.exec(
+        select(ReservaRecurso).where(
+            ReservaRecurso.recurso_id == recurso_id
+        )
+    ).first()
+
+    if vinculo:
+        recurso.disponivel = False
+        session.add(recurso)
+        session.commit()
+        return
+
+    session.delete(recurso)
+
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Recurso possui reservas associadas "
+                "e não pode ser removido."
+            ),
         )
