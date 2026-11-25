@@ -92,10 +92,10 @@ def buscar_espacos_disponiveis(
         )
 
     espacos_reservados = select(Reserva.espaco_id).where(
-        Reserva.status != StatusReserva.cancelada,
-        Reserva.data_inicio < fim,
-        Reserva.data_fim > inicio,
-    )
+      Reserva.status.in_([StatusReserva.confirmada, StatusReserva.em_andamento]),
+      Reserva.data_inicio < fim,
+      Reserva.data_fim > inicio,
+  )
 
     espacos_bloqueados = select(BloqueioEspaco.espaco_id).where(
         BloqueioEspaco.data_inicio < fim,
