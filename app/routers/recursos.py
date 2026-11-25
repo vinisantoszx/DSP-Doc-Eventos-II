@@ -58,6 +58,18 @@ def listar_recursos(
         le=100,
         description="Quantidade de registros por página.",
     ),
+    nome: str | None = Query(
+        default=None,
+        description="Filtra recursos pelo nome.",
+    ),
+    categoria: str | None = Query(
+        default=None,
+        description="Filtra recursos pela categoria/tipo.",
+    ),
+    disponivel: bool | None = Query(
+        default=None,
+        description="Filtra recursos pela disponibilidade.",
+    ),
     session: Session = Depends(get_session),
 ):
     consulta = select(Recurso)
@@ -65,6 +77,27 @@ def listar_recursos(
         select(func.count())
         .select_from(Recurso)
     )
+
+    if nome:
+        filtro_nome = Recurso.nome.ilike(
+            f"%{nome}%"
+        )
+        consulta = consulta.where(filtro_nome)
+        consulta_total = consulta_total.where(filtro_nome)
+
+    if categoria:
+        filtro_categoria = Recurso.categoria.ilike(
+            f"%{categoria}%"
+        )
+        consulta = consulta.where(filtro_categoria)
+        consulta_total = consulta_total.where(filtro_categoria)
+
+    if disponivel is not None:
+        filtro_disponivel = (
+            Recurso.disponivel == disponivel
+        )
+        consulta = consulta.where(filtro_disponivel)
+        consulta_total = consulta_total.where(filtro_disponivel)
 
     total_itens = session.exec(
         consulta_total
