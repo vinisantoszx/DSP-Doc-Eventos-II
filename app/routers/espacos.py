@@ -8,6 +8,7 @@ from app.models import (
     Espaco,
     EspacoCreate,
     EspacoPublicDetalhado,
+    EspacoUpdate,
     InfraestruturaEspaco,
     MetadadosPaginacao,
     PaginaEspacos,
@@ -137,3 +138,79 @@ def buscar_espaco(
             detail="Espaço não encontrado",
         )
     return espaco
+
+
+@router.patch("/{espaco_id}", response_model=EspacoPublicDetalhado)
+def atualizar_espaco(
+    espaco_id: int,
+    dados: EspacoUpdate,
+    session: Session = Depends(get_session),
+):
+    espaco = session.get(Espaco, espaco_id)
+    if not espaco:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Espaço não encontrado",
+        )
+
+    if dados.unidade_id is not None:
+        unidade = session.get(Unidade, dados.unidade_id)
+        if not unidade:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Unidade não encontrada",
+            )
+        if not unidade.ativa:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível vincular espaço a uma unidade inativa",
+            )
+
+    dados_espaco = dados.model_dump(exclude_unset=True, exclude={"infraestrutura"})
+    espaco.sqlmodel_update(dados_espaco)
+
+    if dados.infraestrutura is not None:
+        dados_infra = dados.infraestrutura.model_dump(exclude_unset=True)
+        if espaco.infraestrutura:
+            espaco.infraestrutura.sqlmodel_update(dados_infra)
+            session.add(espaco.infraestrutura)
+        else:
+            nova_infra = InfraestruturaEspaco(**dados_infra, espaco_id=espaco.id)
+            session.add(nova_infra)
+
+    try:
+        session.add(espaco)
+        session.commit()
+        session.refresh(espaco)
+        return espaco
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Erro de integridade ao atualizar o espaço",
+        )
+
+
+@router.delete("/{espaco_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remover_espaco(
+    espaco_id: int,
+    session: Session = Depends(get_session),
+):
+    espaco = session.get(Espaco, espaco_id)
+    if not espaco:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Espaço não encontrado",
+        )
+
+    if espaco.reservas or espaco.bloqueios:
+        espaco.ativo = False
+        session.add(espaco)
+        session.commit()
+        return
+
+    if espaco.infraestrutura:
+        session.delete(espaco.infraestrutura)
+
+    session.delete(espaco)
+    session.commit()
