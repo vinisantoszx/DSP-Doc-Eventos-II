@@ -1,11 +1,14 @@
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import (
+    BloqueioEspaco,
     Espaco,
     Recurso,
+    Reserva,
+    StatusReserva,
     Usuario,
 )
 
@@ -57,6 +60,7 @@ def validar_regras_reserva(
     data_inicio: datetime,
     data_fim: datetime,
     session: Session,
+    reserva_id_ignorar: int | None = None,
 ):
     usuario = session.get(
         Usuario,
@@ -105,4 +109,47 @@ def validar_regras_reserva(
                 "A quantidade de participantes excede "
                 "a capacidade máxima do espaço."
             ),
+        )
+
+    status_ativos = [
+        StatusReserva.confirmada,
+        StatusReserva.em_andamento,
+    ]
+
+    # Verifica conflito de horário com outras reservas ativas no mesmo espaço
+    consulta_conflito_espaco = select(Reserva).where(
+        Reserva.espaco_id == espaco_id,
+        Reserva.status.in_(status_ativos),
+        Reserva.data_inicio < data_fim,
+        Reserva.data_fim > data_inicio,
+    )
+
+    if reserva_id_ignorar is not None:
+        consulta_conflito_espaco = consulta_conflito_espaco.where(
+            Reserva.id != reserva_id_ignorar
+        )
+
+    conflito_espaco = session.exec(
+        consulta_conflito_espaco
+    ).first()
+
+    if conflito_espaco:
+        raise HTTPException(
+            status_code=409,
+            detail="O espaço já possui uma reserva ativa neste intervalo de horário.",
+        )
+
+    # Verifica se há bloqueio de manutenção/limpeza no período
+    conflito_bloqueio = session.exec(
+        select(BloqueioEspaco).where(
+            BloqueioEspaco.espaco_id == espaco_id,
+            BloqueioEspaco.data_inicio < data_fim,
+            BloqueioEspaco.data_fim > data_inicio,
+        )
+    ).first()
+
+    if conflito_bloqueio:
+        raise HTTPException(
+            status_code=409,
+            detail="O espaço possui um bloqueio ativo neste intervalo de horário.",
         )
