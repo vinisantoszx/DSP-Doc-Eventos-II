@@ -1,10 +1,12 @@
-﻿import math
+﻿from datetime import datetime
+import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import (
+    BloqueioEspaco,
     Espaco,
     EspacoCreate,
     EspacoPublicDetalhado,
@@ -12,6 +14,8 @@ from app.models import (
     InfraestruturaEspaco,
     MetadadosPaginacao,
     PaginaEspacos,
+    Reserva,
+    StatusReserva,
     TipoEspaco,
     Unidade,
 )
@@ -63,6 +67,72 @@ def criar_espaco(
             status_code=status.HTTP_409_CONFLICT,
             detail="Erro de integridade ao cadastrar o espaço",
         )
+
+
+@router.get("/disponiveis", response_model=list[EspacoPublicDetalhado])
+def buscar_espacos_disponiveis(
+    data_inicio: datetime,
+    data_fim: datetime,
+    qtd_participantes: int = Query(default=1, ge=1),
+    unidade_id: int | None = None,
+    tipo: TipoEspaco | None = None,
+    andar: int | None = None,
+    possui_projetor: bool | None = None,
+    possui_som: bool | None = None,
+    acessibilidade: bool | None = None,
+    session: Session = Depends(get_session),
+):
+    inicio = data_inicio.replace(tzinfo=None)
+    fim = data_fim.replace(tzinfo=None)
+
+    if fim <= inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A data de término deve ser posterior à data de início",
+        )
+
+    espacos_reservados = select(Reserva.espaco_id).where(
+        Reserva.status != StatusReserva.cancelada,
+        Reserva.data_inicio < fim,
+        Reserva.data_fim > inicio,
+    )
+
+    espacos_bloqueados = select(BloqueioEspaco.espaco_id).where(
+        BloqueioEspaco.data_inicio < fim,
+        BloqueioEspaco.data_fim > inicio,
+    )
+
+    consulta = (
+        select(Espaco)
+        .join(Unidade)
+        .outerjoin(InfraestruturaEspaco)
+        .where(
+            Espaco.ativo == True,
+            Unidade.ativa == True,
+            Espaco.capacidade >= qtd_participantes,
+            Espaco.id.not_in(espacos_reservados),
+            Espaco.id.not_in(espacos_bloqueados),
+        )
+    )
+
+    if unidade_id is not None:
+        consulta = consulta.where(Espaco.unidade_id == unidade_id)
+    if tipo is not None:
+        consulta = consulta.where(Espaco.tipo == tipo)
+    if andar is not None:
+        consulta = consulta.where(Espaco.andar == andar)
+    if possui_projetor is not None:
+        consulta = consulta.where(
+            InfraestruturaEspaco.possui_projetor == possui_projetor
+        )
+    if possui_som is not None:
+        consulta = consulta.where(InfraestruturaEspaco.possui_som == possui_som)
+    if acessibilidade is not None:
+        consulta = consulta.where(
+            InfraestruturaEspaco.acessibilidade == acessibilidade
+        )
+
+    return session.exec(consulta.order_by(Espaco.capacidade, Espaco.id)).all()
 
 
 @router.get("/", response_model=PaginaEspacos)
