@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -8,6 +9,8 @@ from app.database import get_session
 from app.models import (
     BloqueioEspaco,
     Espaco,
+    MetadadosPaginacao,
+    PaginaReservas,
     Recurso,
     Reserva,
     ReservaCreate,
@@ -234,6 +237,145 @@ def criar_reserva(
             status_code=409,
             detail="Não foi possível registrar a reserva por conflito de integridade.",
         )
+
+
+@router.get(
+    "/",
+    response_model=PaginaReservas,
+)
+def listar_reservas(
+    pagina: int = Query(
+        1,
+        ge=1,
+        description="Número da página.",
+    ),
+    tamanho_pagina: int = Query(
+        10,
+        ge=1,
+        le=100,
+        description="Quantidade de registros por página.",
+    ),
+    usuario_id: int | None = Query(
+        default=None,
+        description="Filtra as reservas pelo usuário.",
+    ),
+    espaco_id: int | None = Query(
+        default=None,
+        description="Filtra as reservas pelo espaço.",
+    ),
+    recurso_id: int | None = Query(
+        default=None,
+        description="Filtra as reservas pelo recurso vinculado.",
+    ),
+    status: StatusReserva | None = Query(
+        default=None,
+        description="Filtra as reservas pelo status.",
+    ),
+    inicio: datetime | None = Query(
+        default=None,
+        description="Data e hora inicial do período.",
+    ),
+    fim: datetime | None = Query(
+        default=None,
+        description="Data e hora final do período.",
+    ),
+    session: Session = Depends(get_session),
+):
+    consulta = select(Reserva)
+    consulta_total = (
+        select(
+            func.count(
+                func.distinct(Reserva.id)
+            )
+        )
+        .select_from(Reserva)
+    )
+
+    if usuario_id is not None:
+        filtro_usuario = (
+            Reserva.usuario_id == usuario_id
+        )
+        consulta = consulta.where(filtro_usuario)
+        consulta_total = consulta_total.where(filtro_usuario)
+
+    if espaco_id is not None:
+        filtro_espaco = (
+            Reserva.espaco_id == espaco_id
+        )
+        consulta = consulta.where(filtro_espaco)
+        consulta_total = consulta_total.where(filtro_espaco)
+
+    if recurso_id is not None:
+        consulta = (
+            consulta
+            .join(Reserva.recursos)
+            .where(
+                Recurso.id == recurso_id
+            )
+        )
+        consulta_total = (
+            consulta_total
+            .join(Reserva.recursos)
+            .where(
+                Recurso.id == recurso_id
+            )
+        )
+
+    if status is not None:
+        filtro_status = (
+            Reserva.status == status
+        )
+        consulta = consulta.where(filtro_status)
+        consulta_total = consulta_total.where(filtro_status)
+
+    if inicio is not None:
+        inicio_sem_fuso = inicio.replace(tzinfo=None)
+        filtro_inicio = (
+            Reserva.data_inicio >= inicio_sem_fuso
+        )
+        consulta = consulta.where(filtro_inicio)
+        consulta_total = consulta_total.where(filtro_inicio)
+
+    if fim is not None:
+        fim_sem_fuso = fim.replace(tzinfo=None)
+        filtro_fim = (
+            Reserva.data_fim <= fim_sem_fuso
+        )
+        consulta = consulta.where(filtro_fim)
+        consulta_total = consulta_total.where(filtro_fim)
+
+    total_itens = session.exec(
+        consulta_total
+    ).one()
+
+    total_paginas = (
+        total_itens + tamanho_pagina - 1
+    ) // tamanho_pagina
+
+    deslocamento = (
+        pagina - 1
+    ) * tamanho_pagina
+
+    consulta = (
+        consulta
+        .order_by(Reserva.data_inicio.desc())
+        .offset(deslocamento)
+        .limit(tamanho_pagina)
+    )
+
+    reservas = session.exec(
+        consulta
+    ).all()
+
+    return PaginaReservas(
+        dados=reservas,
+        paginacao=MetadadosPaginacao(
+            total_itens=total_itens,
+            total_paginas=total_paginas,
+            pagina_atual=pagina,
+            tamanho_pagina=tamanho_pagina,
+        ),
+    )
 
 
 @router.get(
