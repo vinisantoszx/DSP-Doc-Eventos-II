@@ -15,6 +15,7 @@ from app.models import (
     Reserva,
     ReservaCreate,
     ReservaPublicDetalhada,
+    ReservaUpdate,
     StatusReserva,
     Usuario,
 )
@@ -477,3 +478,140 @@ def buscar_reserva(
         )
 
     return reserva
+
+
+@router.patch(
+    "/{reserva_id}",
+    response_model=ReservaPublicDetalhada,
+)
+def atualizar_reserva(
+    reserva_id: int,
+    dados: ReservaUpdate,
+    session: Session = Depends(get_session),
+):
+    reserva = session.get(
+        Reserva,
+        reserva_id,
+    )
+
+    if not reserva:
+        raise HTTPException(
+            status_code=404,
+            detail="Reserva não encontrada.",
+        )
+
+    valores = dados.model_dump(
+        exclude_unset=True
+    )
+
+    recurso_ids = valores.pop(
+        "recurso_ids",
+        None,
+    )
+
+    if recurso_ids is not None:
+        recursos = obter_recursos(
+            recurso_ids,
+            session,
+        )
+    else:
+        recursos = reserva.recursos
+
+    # Revalida regras caso horário, espaço, participantes, status ou recursos mudem
+    novo_status = valores.get(
+        "status",
+        reserva.status,
+    )
+    campos_criticos_alterados = any(
+        campo in valores
+        for campo in (
+            "espaco_id",
+            "qtd_participantes",
+            "data_inicio",
+            "data_fim",
+            "status",
+        )
+    ) or (recurso_ids is not None)
+
+    if (
+        campos_criticos_alterados
+        and novo_status not in (StatusReserva.cancelada, StatusReserva.concluida)
+    ):
+        espaco_id = valores.get(
+            "espaco_id",
+            reserva.espaco_id,
+        )
+        qtd_participantes = valores.get(
+            "qtd_participantes",
+            reserva.qtd_participantes,
+        )
+        data_inicio = valores.get(
+            "data_inicio",
+            reserva.data_inicio,
+        )
+        data_fim = valores.get(
+            "data_fim",
+            reserva.data_fim,
+        )
+
+        validar_regras_reserva(
+            usuario_id=reserva.usuario_id,
+            espaco_id=espaco_id,
+            qtd_participantes=qtd_participantes,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            recursos=recursos,
+            session=session,
+            reserva_id_ignorar=reserva.id,
+        )
+
+    reserva.sqlmodel_update(
+        valores
+    )
+
+    if recurso_ids is not None:
+        reserva.recursos = recursos
+
+    session.add(reserva)
+
+    try:
+        session.commit()
+        session.refresh(reserva)
+        return reserva
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Não foi possível atualizar a reserva por conflito de integridade.",
+        )
+
+
+@router.delete(
+    "/{reserva_id}",
+    status_code=204,
+)
+def excluir_reserva(
+    reserva_id: int,
+    session: Session = Depends(get_session),
+):
+    reserva = session.get(
+        Reserva,
+        reserva_id,
+    )
+
+    if not reserva:
+        raise HTTPException(
+            status_code=404,
+            detail="Reserva não encontrada.",
+        )
+
+    session.delete(reserva)
+
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Não foi possível remover a reserva.",
+        )
