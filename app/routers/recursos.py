@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import (
+    MetadadosPaginacao,
+    PaginaRecursos,
     Recurso,
     RecursoCreate,
     RecursoPublic,
@@ -37,3 +40,61 @@ def criar_recurso(
             status_code=409,
             detail="Patrimônio já cadastrado.",
         )
+
+
+@router.get(
+    "/",
+    response_model=PaginaRecursos,
+)
+def listar_recursos(
+    pagina: int = Query(
+        1,
+        ge=1,
+        description="Número da página.",
+    ),
+    tamanho_pagina: int = Query(
+        10,
+        ge=1,
+        le=100,
+        description="Quantidade de registros por página.",
+    ),
+    session: Session = Depends(get_session),
+):
+    consulta = select(Recurso)
+    consulta_total = (
+        select(func.count())
+        .select_from(Recurso)
+    )
+
+    total_itens = session.exec(
+        consulta_total
+    ).one()
+
+    total_paginas = (
+        total_itens + tamanho_pagina - 1
+    ) // tamanho_pagina
+
+    deslocamento = (
+        pagina - 1
+    ) * tamanho_pagina
+
+    consulta = (
+        consulta
+        .order_by(Recurso.nome)
+        .offset(deslocamento)
+        .limit(tamanho_pagina)
+    )
+
+    recursos = session.exec(
+        consulta
+    ).all()
+
+    return PaginaRecursos(
+        dados=recursos,
+        paginacao=MetadadosPaginacao(
+            total_itens=total_itens,
+            total_paginas=total_paginas,
+            pagina_atual=pagina,
+            tamanho_pagina=tamanho_pagina,
+        ),
+    )
