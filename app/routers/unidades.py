@@ -1,7 +1,7 @@
 ﻿import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import (
@@ -49,9 +49,9 @@ def listar_unidades(
     consulta = select(Unidade)
 
     if nome:
-        consulta = consulta.where(col(Unidade.nome).ilike(f"%{nome}%"))
+        consulta = consulta.where(Unidade.nome.ilike(f"%{nome}%"))
     if predio:
-        consulta = consulta.where(col(Unidade.predio).ilike(f"%{predio}%"))
+        consulta = consulta.where(Unidade.predio.ilike(f"%{predio}%"))
     if ativa is not None:
         consulta = consulta.where(Unidade.ativa == ativa)
 
