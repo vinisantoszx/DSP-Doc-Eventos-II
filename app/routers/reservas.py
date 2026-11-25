@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 from sqlmodel import Session
 
@@ -51,6 +53,9 @@ def obter_recursos(
 def validar_regras_reserva(
     usuario_id: int,
     espaco_id: int,
+    qtd_participantes: int,
+    data_inicio: datetime,
+    data_fim: datetime,
     session: Session,
 ):
     usuario = session.get(
@@ -84,4 +89,20 @@ def validar_regras_reserva(
         raise HTTPException(
             status_code=400,
             detail="Espaço está inativo.",
+        )
+
+    # Valida intervalo de horário e capacidade do espaço
+    if data_fim <= data_inicio:
+        raise HTTPException(
+            status_code=400,
+            detail="A data de fim deve ser posterior à data de início.",
+        )
+
+    if qtd_participantes > espaco.capacidade:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A quantidade de participantes excede "
+                "a capacidade máxima do espaço."
+            ),
         )
