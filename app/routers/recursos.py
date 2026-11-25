@@ -10,6 +10,7 @@ from app.models import (
     Recurso,
     RecursoCreate,
     RecursoPublic,
+    RecursoUpdate,
 )
 
 router = APIRouter(
@@ -131,3 +132,67 @@ def listar_recursos(
             tamanho_pagina=tamanho_pagina,
         ),
     )
+
+
+@router.get(
+    "/{recurso_id}",
+    response_model=RecursoPublic,
+)
+def buscar_recurso(
+    recurso_id: int,
+    session: Session = Depends(get_session),
+):
+    recurso = session.get(
+        Recurso,
+        recurso_id,
+    )
+
+    if not recurso:
+        raise HTTPException(
+            status_code=404,
+            detail="Recurso não encontrado.",
+        )
+
+    return recurso
+
+
+@router.patch(
+    "/{recurso_id}",
+    response_model=RecursoPublic,
+)
+def atualizar_recurso(
+    recurso_id: int,
+    dados: RecursoUpdate,
+    session: Session = Depends(get_session),
+):
+    recurso = session.get(
+        Recurso,
+        recurso_id,
+    )
+
+    if not recurso:
+        raise HTTPException(
+            status_code=404,
+            detail="Recurso não encontrado.",
+        )
+
+    dados_atualizacao = dados.model_dump(
+        exclude_unset=True
+    )
+
+    recurso.sqlmodel_update(
+        dados_atualizacao
+    )
+
+    session.add(recurso)
+
+    try:
+        session.commit()
+        session.refresh(recurso)
+        return recurso
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Patrimônio já cadastrado.",
+        )
