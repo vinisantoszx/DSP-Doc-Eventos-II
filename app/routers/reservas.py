@@ -59,6 +59,7 @@ def validar_regras_reserva(
     qtd_participantes: int,
     data_inicio: datetime,
     data_fim: datetime,
+    recursos: list[Recurso],
     session: Session,
     reserva_id_ignorar: int | None = None,
 ):
@@ -153,3 +154,34 @@ def validar_regras_reserva(
             status_code=409,
             detail="O espaço possui um bloqueio ativo neste intervalo de horário.",
         )
+
+    # Impede uso simultâneo do mesmo recurso móvel em outro espaço no mesmo horário
+    for recurso in recursos:
+        consulta_conflito_recurso = (
+            select(Reserva)
+            .join(Reserva.recursos)
+            .where(
+                Recurso.id == recurso.id,
+                Reserva.status.in_(status_ativos),
+                Reserva.data_inicio < data_fim,
+                Reserva.data_fim > data_inicio,
+            )
+        )
+
+        if reserva_id_ignorar is not None:
+            consulta_conflito_recurso = consulta_conflito_recurso.where(
+                Reserva.id != reserva_id_ignorar
+            )
+
+        conflito_recurso = session.exec(
+            consulta_conflito_recurso
+        ).first()
+
+        if conflito_recurso:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"O recurso '{recurso.nome}' já está reservado "
+                    "em outro ambiente neste intervalo de horário."
+                ),
+            )
