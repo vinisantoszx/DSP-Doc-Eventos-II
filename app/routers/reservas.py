@@ -378,6 +378,85 @@ def listar_reservas(
     )
 
 
+# Histórico completo de reservas de um espaço
+@router.get(
+    "/espacos/{espaco_id}",
+    response_model=PaginaReservas,
+)
+def listar_reservas_por_espaco(
+    espaco_id: int,
+    pagina: int = Query(
+        1,
+        ge=1,
+        description="Número da página.",
+    ),
+    tamanho_pagina: int = Query(
+        10,
+        ge=1,
+        le=100,
+        description="Quantidade de registros por página.",
+    ),
+    session: Session = Depends(get_session),
+):
+    espaco = session.get(
+        Espaco,
+        espaco_id,
+    )
+
+    if not espaco:
+        raise HTTPException(
+            status_code=404,
+            detail="Espaço não encontrado.",
+        )
+
+    filtro_espaco = (
+        Reserva.espaco_id == espaco_id
+    )
+
+    consulta = (
+        select(Reserva)
+        .where(filtro_espaco)
+    )
+    consulta_total = (
+        select(func.count())
+        .select_from(Reserva)
+        .where(filtro_espaco)
+    )
+
+    total_itens = session.exec(
+        consulta_total
+    ).one()
+
+    total_paginas = (
+        total_itens + tamanho_pagina - 1
+    ) // tamanho_pagina
+
+    deslocamento = (
+        pagina - 1
+    ) * tamanho_pagina
+
+    consulta = (
+        consulta
+        .order_by(Reserva.data_inicio.desc())
+        .offset(deslocamento)
+        .limit(tamanho_pagina)
+    )
+
+    reservas = session.exec(
+        consulta
+    ).all()
+
+    return PaginaReservas(
+        dados=reservas,
+        paginacao=MetadadosPaginacao(
+            total_itens=total_itens,
+            total_paginas=total_paginas,
+            pagina_atual=pagina,
+            tamanho_pagina=tamanho_pagina,
+        ),
+    )
+
+
 @router.get(
     "/{reserva_id}",
     response_model=ReservaPublicDetalhada,
