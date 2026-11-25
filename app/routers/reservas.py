@@ -1,13 +1,17 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from app.database import get_session
 from app.models import (
     BloqueioEspaco,
     Espaco,
     Recurso,
     Reserva,
+    ReservaCreate,
+    ReservaPublicDetalhada,
     StatusReserva,
     Usuario,
 )
@@ -185,3 +189,70 @@ def validar_regras_reserva(
                     "em outro ambiente neste intervalo de horário."
                 ),
             )
+
+
+@router.post(
+    "/",
+    response_model=ReservaPublicDetalhada,
+    status_code=201,
+)
+def criar_reserva(
+    dados: ReservaCreate,
+    session: Session = Depends(get_session),
+):
+    recursos = obter_recursos(
+        dados.recurso_ids,
+        session,
+    )
+
+    validar_regras_reserva(
+        usuario_id=dados.usuario_id,
+        espaco_id=dados.espaco_id,
+        qtd_participantes=dados.qtd_participantes,
+        data_inicio=dados.data_inicio,
+        data_fim=dados.data_fim,
+        recursos=recursos,
+        session=session,
+    )
+
+    reserva = Reserva(
+        **dados.model_dump(
+            exclude={"recurso_ids"}
+        ),
+        recursos=recursos,
+    )
+
+    session.add(reserva)
+
+    try:
+        session.commit()
+        session.refresh(reserva)
+        return reserva
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Não foi possível registrar a reserva por conflito de integridade.",
+        )
+
+
+@router.get(
+    "/{reserva_id}",
+    response_model=ReservaPublicDetalhada,
+)
+def buscar_reserva(
+    reserva_id: int,
+    session: Session = Depends(get_session),
+):
+    reserva = session.get(
+        Reserva,
+        reserva_id,
+    )
+
+    if not reserva:
+        raise HTTPException(
+            status_code=404,
+            detail="Reserva não encontrada.",
+        )
+
+    return reserva
