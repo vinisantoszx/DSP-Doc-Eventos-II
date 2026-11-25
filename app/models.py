@@ -106,6 +106,7 @@ class EspacoBase(SQLModel):
     capacidade: int = Field(gt=0)
     descricao: str | None = None
     ativo: bool = True
+    andar: int | None = None
     unidade_id: int = Field(foreign_key="unidade.id")
 
 
@@ -139,6 +140,7 @@ class EspacoUpdate(SQLModel):
     capacidade: int | None = None
     descricao: str | None = None
     ativo: bool | None = None
+    andar: int | None = None
     unidade_id: int | None = None
     infraestrutura: InfraestruturaUpdate | None = None
 
@@ -318,3 +320,37 @@ class BloqueioUpdate(SQLModel):
 class PaginaBloqueios(SQLModel):
     dados: list[BloqueioPublicDetalhado]
     paginacao: MetadadosPaginacao
+
+class HistoricoUtilizacaoPublic(SQLModel):
+    reserva_id: int
+    finalidade: str
+    qtd_participantes: int
+    data_inicio: datetime
+    data_fim: datetime
+    status: StatusReserva
+    espaco: str
+    unidade: str
+    usuario: str
+
+class EspacosMaisRequisitadosPublic(SQLModel):
+    espaco_id: int
+    espaco: str
+    total_reservas: int
+
+class ReservasPorUnidadePublic(SQLModel):
+    unidade_id: int
+    unidade: str
+    total_reservas: int
+
+class RecursoMaisUtilizadoPublic(SQLModel):
+    recurso_id: int
+    recurso: str
+    total_reservas: int
+
+
+class EstatisticasGeraisPublic(SQLModel):
+    reservas_futuras: int
+    reservas_em_andamento: int
+    reservas_canceladas: int
+    reservas_concluidas: int
+    recursos_mais_utilizados: list[RecursoMaisUtilizadoPublic]
