@@ -94,7 +94,7 @@ class InfraestruturaPublic(InfraestruturaBase):
 class InfraestruturaUpdate(SQLModel):
     possui_projetor: bool | None = None
     possui_som: bool | None = None
-    qtd_computadores: int | None = None
+    qtd_computadores: int | None = Field(default=None, ge=0)
     acessibilidade: bool | None = None
     climatizado: bool | None = None
     observacoes: str | None = None
@@ -137,7 +137,7 @@ class EspacoPublicDetalhado(EspacoPublic):
 class EspacoUpdate(SQLModel):
     nome: str | None = None
     tipo: TipoEspaco | None = None
-    capacidade: int | None = None
+    capacidade: int | None = Field(default=None, gt=0)
     descricao: str | None = None
     ativo: bool | None = None
     andar: int | None = None
@@ -258,7 +258,7 @@ class ReservaPublicDetalhada(ReservaPublic):
 
 class ReservaUpdate(SQLModel):
     finalidade: str | None = None
-    qtd_participantes: int | None = None
+    qtd_participantes: int | None = Field(default=None, gt=0)
     data_inicio: datetime | None = None
     data_fim: datetime | None = None
     status: StatusReserva | None = None
