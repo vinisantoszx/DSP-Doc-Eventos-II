@@ -137,7 +137,7 @@ As reservas possuem quatro situações possíveis: `confirmada`, `em_andamento`,
 Clone o repositório e entre na pasta:
 
 ```bash
-git clone https://github.com/vinisantoszx/DSP-Doc-Eventos-II.git
+git clone [https://github.com/vinisantoszx/DSP-Doc-Eventos-II.git](https://github.com/vinisantoszx/DSP-Doc-Eventos-II.git)
 cd DSP-Doc-Eventos-II
 ```
 
@@ -182,7 +182,7 @@ As tabelas são definidas pelos modelos de `app/models.py`. Quando a estrutura m
 
 A configuração fica em `migrations/env.py`, que utiliza o `SQLModel.metadata` e a mesma variável `DATABASE_URL` da aplicação.
 
-Com o banco escolhido e o `.env` configurado, aplique as migrações:
+Com o banco escolhido e o `.env` configurado, aplique as migrações **antes de iniciar o servidor pela primeira vez**:
 
 ```bash
 alembic upgrade head
@@ -257,7 +257,106 @@ Também existe a documentação ReDoc:
 
 `http://127.0.0.1:8000/redoc`
 
-O endereço principal (`GET /`) retorna uma indicação de que a API está ativa. Durante as requisições, o middleware registra o método HTTP, o caminho, o código de resposta e o tempo de processamento.
+O endereço principal (`GET /`) retorna `{"status": "ativo", "sistema": "Sistema de Reservas de Espaços"}`. Durante as requisições, o middleware registra o método HTTP, o caminho, o código de resposta e o tempo de processamento.
+
+## Paginação e filtros
+
+Todas as listagens principais (`GET /unidades/`, `GET /espacos/`, `GET /usuarios/`, `GET /recursos/`, `GET /reservas/` e `GET /bloqueios/`) executam paginação e filtragem diretamente no banco de dados via SQLAlchemy/SQLModel:
+
+- **Paginação:** controlada pelos parâmetros `pagina` (padrão `1`) e `tamanho_pagina` (padrão `10`, máximo `100`), retornando a lista em `dados` e os metadados em `paginacao` (`total_itens`, `total_paginas`, `pagina_atual` e `tamanho_pagina`).
+- **Filtros combinados:** parâmetros opcionais combinados dinamicamente na cláusula `WHERE` (incluindo buscas parciais com `ILIKE` e junções com tabelas relacionadas).
+
+## Unidades e espaços
+
+### Unidades (`/unidades`)
+
+| Método | Caminho | Operação |
+|---|---|---|
+| POST | `/unidades/` | Cadastra uma unidade |
+| GET | `/unidades/` | Lista unidades (filtros: `nome`, `predio`, `ativa`) |
+| GET | `/unidades/{unidade_id}` | Consulta uma unidade |
+| GET | `/unidades/{unidade_id}/espacos` | Lista todos os espaços vinculados à unidade (1:N) |
+| PATCH | `/unidades/{unidade_id}` | Atualiza parcialmente uma unidade |
+| DELETE | `/unidades/{unidade_id}` | Remove uma unidade (retorna HTTP 409 se houver espaços vinculados) |
+
+### Espaços e infraestrutura (`/espacos`)
+
+| Método | Caminho | Operação |
+|---|---|---|
+| POST | `/espacos/` | Cadastra um espaço junto com sua ficha 1:1 de `InfraestruturaEspaco` |
+| GET | `/espacos/` | Lista espaços (filtros: `nome`, `unidade_id`, `tipo`, `andar`, `capacidade_minima`, `ativo`, `possui_projetor`, `possui_som`, `acessibilidade`) |
+| GET | `/espacos/disponiveis` | Busca ambientes livres em um intervalo de datas |
+| GET | `/espacos/{espaco_id}` | Consulta um espaço com unidade e infraestrutura |
+| PATCH | `/espacos/{espaco_id}` | Atualiza parcialmente dados do espaço e/ou de sua infraestrutura |
+| DELETE | `/espacos/{espaco_id}` | Remove o espaço ou o desativa (`ativo = false`) caso possua histórico de reservas/bloqueios |
+
+Exemplo de cadastro de espaço com infraestrutura 1:1 (`POST /espacos/`):
+
+```json
+{
+    "nome": "Laboratório de Redes",
+    "tipo": "laboratorio",
+    "capacidade": 30,
+    "descricao": "Laboratório para aulas práticas",
+    "andar": 2,
+    "unidade_id": 1,
+    "infraestrutura": {
+        "possui_projetor": true,
+        "possui_som": false,
+        "qtd_computadores": 30,
+        "acessibilidade": true,
+        "climatizado": true
+    }
+}
+```
+
+## Usuários, recursos e reservas
+
+### Usuários (`/usuarios`)
+
+| Método | Caminho | Operação |
+|---|---|---|
+| POST | `/usuarios/` | Cadastra um usuário (`email` e `matricula` únicos) |
+| GET | `/usuarios/` | Lista usuários (filtros: `nome`, `departamento`, `ativo`) |
+| GET | `/usuarios/{usuario_id}` | Consulta um usuário |
+| GET | `/usuarios/{usuario_id}/reservas` | Lista o histórico paginado de reservas do usuário |
+| PATCH | `/usuarios/{usuario_id}` | Atualiza parcialmente um usuário |
+| DELETE | `/usuarios/{usuario_id}` | Remove o usuário ou o desativa (`ativo = false`) se houver reservas vinculadas |
+
+### Recursos móveis (`/recursos`)
+
+| Método | Caminho | Operação |
+|---|---|---|
+| POST | `/recursos/` | Cadastra um recurso (`patrimonio` único) |
+| GET | `/recursos/` | Lista recursos (filtros: `nome`, `categoria`, `disponivel`) |
+| GET | `/recursos/{recurso_id}` | Consulta um recurso |
+| PATCH | `/recursos/{recurso_id}` | Atualiza parcialmente um recurso |
+| DELETE | `/recursos/{recurso_id}` | Remove o recurso ou o marca como indisponível (`disponivel = false`) se já usado em reservas |
+
+### Reservas (`/reservas`)
+
+| Método | Caminho | Operação |
+|---|---|---|
+| POST | `/reservas/` | Cria uma reserva e associa recursos móveis (N:N via `recurso_ids`) |
+| GET | `/reservas/` | Lista reservas (filtros: `usuario_id`, `espaco_id`, `recurso_id`, `status`, `inicio`, `fim`) |
+| GET | `/reservas/espacos/{espaco_id}` | Consulta o histórico paginado de reservas de um espaço |
+| GET | `/reservas/{reserva_id}` | Consulta uma reserva detalhada |
+| PATCH | `/reservas/{reserva_id}` | Altera horário, espaço, status ou recursos, revalidando conflitos |
+| DELETE | `/reservas/{reserva_id}` | Remove uma reserva e seus vínculos na tabela associativa |
+
+Exemplo de solicitação de reserva (`POST /reservas/`):
+
+```json
+{
+    "finalidade": "Seminário de Engenharia de Software",
+    "qtd_participantes": 40,
+    "data_inicio": "2026-12-05T14:00:00",
+    "data_fim": "2026-12-05T16:00:00",
+    "usuario_id": 1,
+    "espaco_id": 1,
+    "recurso_ids": [1, 2]
+}
+```
 
 ## Bloqueios de espaços
 
@@ -344,42 +443,48 @@ A consulta não recebe parâmetros.
 
 ## Consulta de espaços disponíveis — Tema 6
 
-A funcionalidade central do Tema 6 é a busca por ambientes que atendam às condições de uma atividade em determinado período.
-
-A rota prevista para essa consulta é:
+A funcionalidade central do Tema 6 é a busca por ambientes que atendam às condições de uma atividade em determinado período, implementada em:
 
 `GET /espacos/disponiveis`
 
-O contrato definido para a funcionalidade considera:
+Parâmetros aceitos pela consulta:
 
 | Parâmetro | Finalidade |
 |---|---|
-| `data_inicio` | Início do período desejado |
-| `data_fim` | Fim do período desejado |
-| `qtd_participantes` | Quantidade de pessoas que utilizarão o ambiente |
-| `unidade_id` | Unidade na qual o espaço deve estar localizado |
-| Requisitos de infraestrutura | Necessidade de projetor, som e acessibilidade |
+| `data_inicio` | Início do período desejado (obrigatório) |
+| `data_fim` | Fim do período desejado (obrigatório) |
+| `qtd_participantes` | Quantidade mínima de pessoas que utilizarão o ambiente (padrão `1`) |
+| `unidade_id` | Filtra por uma unidade específica |
+| `tipo` | Filtra pelo tipo de espaço (`sala_reuniao`, `auditorio`, `laboratorio`, `sala_treinamento`, `multiuso`) |
+| `andar` | Filtra pelo andar do ambiente |
+| `possui_projetor` | Filtra espaços com projetor fixo (`true` / `false`) |
+| `possui_som` | Filtra espaços com sistema de som (`true` / `false`) |
+| `acessibilidade` | Filtra espaços com acessibilidade (`true` / `false`) |
 
-A busca deve combinar informações de `Espaco` e `InfraestruturaEspaco` com os registros de `Reserva` e `BloqueioEspaco`. Assim, não basta verificar se o ambiente tem capacidade: também é necessário conferir se atende à infraestrutura solicitada e se o período está livre.
+A busca combina informações de `Espaco`, `Unidade` e `InfraestruturaEspaco` com subconsultas sobre `Reserva` e `BloqueioEspaco`. Ambientes inativos, vinculados a unidades inativas, com capacidade inferior à solicitada ou que possuam reservas ativas (`confirmada` ou `em_andamento`) ou bloqueios sobrepostos ao intervalo são excluídos diretamente na consulta SQL.
 
-Um espaço não deve ser apresentado como disponível quando houver uma reserva confirmada ou em andamento, ou um bloqueio, com horário sobreposto ao intervalo solicitado.
+Exemplo de consulta:
 
-**Nota sobre a integração:** na branch `feat/sebastian`, o arquivo `app/routers/espacos.py` ainda contém somente a declaração do roteador. A rota depende da implementação e integração do módulo de espaços. Os nomes exatos dos parâmetros de infraestrutura devem acompanhar a versão final dessa rota.
+```http
+GET /espacos/disponiveis?data_inicio=2026-12-05T14:00:00&data_fim=2026-12-05T16:00:00&qtd_participantes=20&possui_projetor=true
+```
 
 ## Regras de negócio consideradas
 
-As validações de reserva e bloqueio precisam preservar a consistência dos horários e dos relacionamentos. Entre as regras previstas para o sistema estão:
+As validações do sistema preservam a consistência dos horários, dos relacionamentos e do histórico de utilização:
 
-- A data final de uma operação deve ser posterior à data inicial.
-- O usuário, o espaço e os recursos referenciados precisam existir.
+- A data final de uma reserva, bloqueio ou consulta deve ser posterior à data inicial.
+- O usuário, o espaço e os recursos referenciados precisam existir e estar ativos/disponíveis.
 - A quantidade de participantes não pode ultrapassar a capacidade do ambiente.
-- Reservas confirmadas ou em andamento não podem ocupar o mesmo espaço em períodos sobrepostos.
+- Reservas `confirmada` ou `em_andamento` não podem ocupar o mesmo espaço em períodos sobrepostos (intervalos adjacentes, como 14h–16h e 16h–18h, são permitidos).
 - Uma reserva não pode coincidir com um bloqueio de manutenção, limpeza ou reforma.
-- Um recurso móvel não pode ser utilizado em duas reservas simultâneas.
-- Alterações de reservas devem repetir as validações necessárias, não apenas o cadastro inicial.
-- Um bloqueio não pode ser criado ou atualizado sobre uma reserva confirmada ou em andamento.
+- Um recurso móvel não pode ser utilizado em duas reservas ativas simultâneas.
+- Alterações de reservas (`PATCH`) repetem as validações de disponibilidade, capacidade e conflitos, desconsiderando a própria reserva editada.
+- Um bloqueio não pode ser criado ou atualizado sobre uma reserva `confirmada` ou `em_andamento`.
+- O histórico de reservas é preservado: ao excluir um espaço, usuário ou recurso que já possua reservas associadas, o registro é apenas desativado (`ativo = false` ou `disponivel = false`) em vez de ser apagado do banco.
+- Uma unidade não pode ser excluída caso possua espaços vinculados (HTTP 409).
 
-Nas respostas da API são utilizados códigos HTTP como 200, 201, 204, 400, 404, 409 e 422, conforme o resultado da operação ou o tipo de problema encontrado.
+Nas respostas da API são utilizados códigos HTTP como `200`, `201`, `204`, `400`, `404`, `409` e `422`, conforme o resultado da operação ou o tipo de problema encontrado.
 
 ## Organização dos arquivos
 
@@ -417,7 +522,7 @@ DSP-Doc-Eventos-II/
 └── requirements.txt
 ```
 
-O `main.py` registra os roteadores e configura a aplicação FastAPI. `database.py` concentra a conexão e a criação das sessões. Os modelos de tabelas e os schemas de entrada e saída ficam em `models.py`.
+O `main.py` registra os roteadores, o middleware de log e configura a aplicação FastAPI. `database.py` concentra a conexão e a criação das sessões. Os modelos de tabelas e os schemas de entrada e saída ficam em `models.py`.
 
 ---
 Trabalho Prático 2 — Desenvolvimento de Software para Persistência
