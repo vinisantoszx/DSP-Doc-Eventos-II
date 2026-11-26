@@ -504,6 +504,20 @@ def atualizar_reserva(
         exclude_unset=True
     )
 
+    for campo in (
+        "finalidade",
+        "qtd_participantes",
+        "data_inicio",
+        "data_fim",
+        "status",
+        "espaco_id",
+    ):
+        if campo in valores and valores[campo] is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"O campo '{campo}' não pode ser nulo.",
+            )
+
     recurso_ids = valores.pop(
         "recurso_ids",
         None,
